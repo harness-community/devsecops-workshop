@@ -2,15 +2,42 @@
 "use client";
 
 import * as React from 'react';
+import { useState, useEffect } from 'react';
 import { CacheProvider } from '@emotion/react';
 import createEmotionCache from '@/lib/createEmotionCache';
-import { ThemeProvider, CssBaseline } from '@mui/material';
+import { ThemeProvider, CssBaseline, CircularProgress, Box } from '@mui/material';
 import theme from '@/app/styles/theme';
 import Sidebar from '@/app/components/Sidebar';
 
 const clientSideEmotionCache = createEmotionCache();
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setIsLoading(false), 100);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (isLoading) {
+    return (
+      <html lang="en">
+        <body style={{ backgroundColor: '#000', minHeight: '100vh' }}>
+          <Box
+            sx={{
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              minHeight: '100vh',
+            }}
+          >
+            <CircularProgress size={60} sx={{ color: 'white' }} />
+          </Box>
+        </body>
+      </html>
+    );
+  }
+
   return (
     <html lang="en">
       <head>
