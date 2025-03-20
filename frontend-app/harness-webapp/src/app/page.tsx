@@ -2,25 +2,36 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Container, Card, CardContent, CardMedia, Typography, Button, Box } from '@mui/material';
+import { Container, Card, CardContent, CardMedia, Typography, Button, Box, Alert } from '@mui/material';
 import Grid from '@mui/material/Grid2';
 import { ApiService } from '@/app/services/apiService';
 import { HarnessFfService } from '@/app/services/harnessFFService';
 
 export default function Home() {
   const [serviceName] = useState('backend');
-  const [applicationVersion, setApplicationVersion] = useState('v1.4');
-  const [lastExecution, setLastExecution] = useState('12.3');
+  const [applicationVersion, setApplicationVersion] = useState('UNKNOWN');
+  const [lastExecution, setLastExecution] = useState('UNKNOWN');
   const [isCanary, setIsCanary] = useState(false);
-
+  const [showAlert, setShowAlert] = useState(false);
   const apiService = new ApiService();
+
+  const checkBackendAvailability = async (): Promise<boolean> => {
+    try {
+      await apiService.getPods('backend-deployment');
+      return true;
+    } catch (error) {
+      console.error('Backend availability check failed:', error);
+      return false;
+    }
+  };
+
   const ffService = process.env.NEXT_PUBLIC_ENABLE_FF_SERVICE === 'true'
     ? new HarnessFfService()
     : null;
 
   useEffect(() => {
     refreshExecutionDetails();
-  }, []); // Empty dependency array is fine since this only runs on mount
+  }, []);
 
   const refreshExecutionDetails = async () => {
     const data = await apiService.getExecutionDetails();
@@ -32,6 +43,18 @@ export default function Home() {
   const checkValue = () => {
     if (!ffService) return false;
     return ffService.variationFF() === 'on';
+  };
+
+  const handleCheckRelease = async () => {
+    const isAvailable = await checkBackendAvailability();
+    if (!isAvailable) {
+      setShowAlert(true);
+      // Optional: Auto-hide alert after 5 seconds
+      setTimeout(() => setShowAlert(false), 5000);
+      return;
+    }
+    setShowAlert(false);
+    await refreshExecutionDetails();
   };
 
   return (
@@ -111,6 +134,15 @@ export default function Home() {
               )}
             </CardContent>
             <Box sx={{ p: 2 }}>
+              {showAlert && (
+                <Alert 
+                  severity="error" 
+                  sx={{ mb: 2 }}
+                  onClose={() => setShowAlert(false)}
+                >
+                  Backend is currently unavailable. Please verify that it has been deployed.
+                </Alert>
+              )}
               <Button
                 variant='contained'
                 sx={{
@@ -121,7 +153,7 @@ export default function Home() {
                   fontWeight: 'bold',
                   '&:hover': { bgcolor: '#00b3a4' },
                 }}
-                onClick={checkValue() ? undefined : refreshExecutionDetails}
+                onClick={checkValue() ? undefined : handleCheckRelease}
                 href={checkValue() ? 'https://www.harness.io/events' : undefined}
               >
                 {checkValue() ? 'Learn More' : 'Check Release'}
