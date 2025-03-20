@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { LineChart } from '@mui/x-charts/LineChart';
 import { ApiService } from '@/app/services/apiService';
-import { Box, Button, Stack } from '@mui/material';
+import { Box, Button, Stack, Typography } from '@mui/material';
 import ArrowCircleLeftOutlinedIcon from '@mui/icons-material/ArrowCircleLeftOutlined';
 import StopCircleOutlinedIcon from '@mui/icons-material/StopCircleOutlined';
 import PlayCircleOutlineOutlinedIcon from '@mui/icons-material/PlayCircleOutlineOutlined';
@@ -34,9 +34,20 @@ const DistributionChart: React.FC = () => {
   const [chartData, setChartData] = useState<ChartData[]>([]);
   const [isRunning, setIsRunning] = useState(false);
   const [showCanary, setShowCanary] = useState(true);
+  const [backendStatus, setBackendStatus] = useState<'available' | 'unavailable' | 'checking'>('checking');
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const distributionDataRef = useRef<PodEntry[]>([]);
   const apiService = new ApiService();
+
+  const checkBackendAvailability = async (): Promise<boolean> => {
+    try {
+      await apiService.getPods('backend-deployment');
+      return true;
+    } catch (error) {
+      console.error('Backend availability check failed:', error);
+      return false;
+    }
+  };
 
   const fetchData = async (): Promise<PodEntry[]> => {
     try {
@@ -110,8 +121,17 @@ const DistributionChart: React.FC = () => {
     setTimeout(() => setShowCanary(true), 4000);
   };
 
-  const toggleCollection = () => {
+  const toggleCollection = async () => {
     if (!isRunning) {
+      setBackendStatus('checking');
+      const isBackendAvailable = await checkBackendAvailability();
+      
+      if (!isBackendAvailable) {
+        setBackendStatus('unavailable');
+        return;
+      }
+
+      setBackendStatus('available');
       setIsRunning(true);
       const interval = 5000;
       distributionDataRef.current = [];
@@ -132,6 +152,7 @@ const DistributionChart: React.FC = () => {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
         setIsRunning(false);
+        setBackendStatus('checking');
       }
     }
   };
@@ -145,6 +166,7 @@ const DistributionChart: React.FC = () => {
     setChartData([]);
     distributionDataRef.current = [];
     setShowCanary(true);
+    setBackendStatus('checking');
   };
 
   useEffect(() => {
@@ -155,7 +177,6 @@ const DistributionChart: React.FC = () => {
     };
   }, []);
 
-  // Collect all timestamps from all series
   const allTimestamps = new Set<number>();
   chartData.forEach(item => {
     item.series.forEach(point => {
@@ -166,7 +187,6 @@ const DistributionChart: React.FC = () => {
     .sort((a, b) => a - b)
     .map(time => new Date(time));
 
-  // Define the series data
   const series = chartData.map(item => {
     const dataMap = new Map(item.series.map(point => [point.name.getTime(), point.value]));
     const seriesData = uniqueXAxisData.map(date => dataMap.get(date.getTime()) || 0);
@@ -223,7 +243,7 @@ const DistributionChart: React.FC = () => {
         </Button>
       </Stack>
 
-      {chartData.length > 0 && (
+      {chartData.length > 0 ? (
         <Box sx={{ height: 500, width: '100%' }}>
           <LineChart
             xAxis={[{
@@ -241,6 +261,29 @@ const DistributionChart: React.FC = () => {
               },
             }}
           />
+        </Box>
+      ) : (
+        <Box 
+          sx={{ 
+            height: 500, 
+            width: '100%', 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center',
+            border: '1px dashed grey',
+            borderRadius: '8px',
+          }}
+        >
+          <Typography 
+            variant="h6" 
+            color="textSecondary" 
+            align="center"
+            sx={{ maxWidth: '80%' }}
+          >
+            {backendStatus === 'unavailable' 
+              ? 'Backend is currently unavailable. Please verify that it has been deployed.' 
+              : 'Please click "Start" to begin collecting data.'}
+          </Typography>
         </Box>
       )}
     </Box>
